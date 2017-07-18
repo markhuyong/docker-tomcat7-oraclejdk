@@ -1,4 +1,4 @@
-FROM mbentley/oracle-jdk7:latest
+FROM anapsix/alpine-java:7_jdk
 MAINTAINER markhuyong <markhuyong@gmail.com>
 
 ENV CATALINA_HOME /usr/local/tomcat
@@ -45,25 +45,20 @@ RUN set -x \
 	&& tar -xvf bin/tomcat-native.tar.gz -C "$nativeBuildDir" --strip-components=1 \
 	&& apk add --no-cache --virtual .native-build-deps \
 		apr-dev \
-		coreutils \
-		dpkg-dev dpkg \
 		gcc \
 		libc-dev \
 		make \
-		"openjdk${JAVA_VERSION%%[-~bu]*}"="$JAVA_ALPINE_VERSION" \
 		openssl-dev \
 	&& ( \
 		export CATALINA_HOME="$PWD" \
 		&& cd "$nativeBuildDir/native" \
-		&& gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)" \
 		&& ./configure \
-			--build="$gnuArch" \
 			--libdir="$TOMCAT_NATIVE_LIBDIR" \
 			--prefix="$CATALINA_HOME" \
 			--with-apr="$(which apr-1-config)" \
-			--with-java-home="$(docker-java-home)" \
+			--with-java-home="$JAVA_HOME" \
 			--with-ssl=yes \
-		&& make -j "$(nproc)" \
+		&& make -j $(getconf _NPROCESSORS_ONLN) \
 		&& make install \
 	) \
 	&& runDeps="$( \
@@ -87,6 +82,14 @@ RUN set -e \
 		echo >&2 "$nativeLines"; \
 		exit 1; \
 	fi
+
+# add windows fonts
+ADD ./fonts /usr/share/fonts
+
+RUN set -ex && \
+    apk upgrade --update && \
+    apk add --update fontconfig mkfontscale mkfontdir && \
+    mkfontscale && mkfontdir && fc-cache
 
 EXPOSE 8080
 CMD ["catalina.sh", "run"]
